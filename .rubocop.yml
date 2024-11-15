@@ -1,5 +1,5 @@
 AllCops:
-  TargetRubyVersion: 3.0
+  TargetRubyVersion: 3.1
   NewCops: enable
 
 Metrics/BlockLength:
@@ -7,6 +7,9 @@ Metrics/BlockLength:
 
 Metrics/MethodLength:
   Max: 100
+
+Style/ExplicitBlockArgument:
+  Enabled: false
 
 Style/GuardClause:
   Enabled: false
