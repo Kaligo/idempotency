@@ -5,9 +5,9 @@ source 'https://rubygems.org'
 # Specify your gem's dependencies in idempotency.gemspec
 gemspec
 
-gem 'rake', '~> 13.0'
-
+gem 'mock_redis'
 gem 'rspec', '~> 3.0'
 
-gem 'debug'
+gem 'connection_pool'
+gem 'pry-byebug'
 gem 'rubocop', '~> 1.21'
