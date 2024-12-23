@@ -26,7 +26,7 @@ RSpec.describe Idempotency::Cache do
       let(:response_headers) { { 'header' => 'valuee' } }
 
       before do
-        cache.set(fingerprint, response)
+        cache.set(fingerprint, response.status, response.body, response.headers)
       end
 
       it { is_expected.to eq([response_status, response_body, response_headers]) }
@@ -38,7 +38,7 @@ RSpec.describe Idempotency::Cache do
   end
 
   describe '#set' do
-    subject { cache.set(fingerprint, response) }
+    subject { cache.set(fingerprint, response.status, response.body, response.headers) }
 
     let(:response) { Response.new(response_status, response_body, response_headers) }
     let(:response_status) { 200 }

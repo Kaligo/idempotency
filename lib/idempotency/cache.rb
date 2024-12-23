@@ -4,7 +4,7 @@ require 'digest'
 require 'redis'
 require 'msgpack'
 
-module Idempotency
+class Idempotency
   class Cache
     class LockConflict < StandardError; end
 
@@ -39,11 +39,11 @@ module Idempotency
       deserialize(cached_response) if cached_response
     end
 
-    def set(fingerprint, response)
+    def set(fingerprint, response_status, response_headers, response_body)
       key = response_cache_key(fingerprint)
 
       with_redis do |r|
-        r.set(key, serialize(response))
+        r.set(key, serialize(response_status, response_headers, response_body))
       end
     end
 
@@ -100,8 +100,8 @@ module Idempotency
       "idempotency:lock:#{fingerprint}"
     end
 
-    def serialize(response)
-      cache_data = [response.status, response.body, response.headers]
+    def serialize(response_status, response_headers, response_body)
+      cache_data = [response_status, response_headers, response_body]
       MessagePack.pack(cache_data)
     end
 
