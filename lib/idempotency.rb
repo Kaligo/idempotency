@@ -10,8 +10,9 @@ class Idempotency
   extend Dry::Configurable
 
   setting :redis_pool
-  setting :default_lock_expiry
   setting :logger
+  setting :default_lock_expiry, default: 300 # 5 minutes
+  setting :idempotent_methods, default: %w[POST PUT PATCH DELETE]
 
   setting :response_body do
     setting :concurrent_error, default: {
