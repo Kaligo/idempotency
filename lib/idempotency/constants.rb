@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-module Idempotency
+class Idempotency
   class Constants
+    RACK_HEADER_KEY = 'HTTP_IDEMPOTENCY_KEY'
     HEADER_KEY = 'Idempotency-Key'
   end
 end

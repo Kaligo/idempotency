@@ -1,35 +1,30 @@
 # frozen_string_literal: true
 
-RSpec.describe Idempotency::Rails do
-  class RailsApplicationController # rubocop:disable Lint/ConstantDefinitionInBlock
-    include Idempotency::Rails
+RSpec.describe Idempotency::Hanami do
+  class HanamiApplicationController # rubocop:disable Lint/ConstantDefinitionInBlock
+    include Idempotency::Hanami
 
-    def initialize(request, response)
+    def initialize(request)
       @request = request
-      @response = response
+      @status = nil
+      @body = nil
+      @headers = {}
     end
 
-    def render(json:, status:)
-      response.body = json
-      response.status = status
+    def response
+      [status, headers, [body]]
     end
 
-    private
-
-    attr_reader :request, :response
+    attr_accessor :request, :body, :headers, :status
   end
 
   Response = Struct.new(:status, :body, :headers) do # rubocop:disable Lint/ConstantDefinitionInBlock
-    def set_header(key, value)
-      headers[key] = value
-    end
-
     def to_a
       [status, headers, body]
     end
   end
 
-  let(:controller) { RailsApplicationController.new(request, response) }
+  let(:controller) { HanamiApplicationController.new(request) }
   let(:mock_redis) { MockRedis.new }
   let(:mock_controller_action) { double('Controller') }
 
@@ -44,7 +39,7 @@ RSpec.describe Idempotency::Rails do
 
   let(:request) do
     double(
-      'ActionDispatch::Request',
+      'Hanami::Action::Request',
       request_method: request_method,
       path: '/int/orders/a960e817-3b3c-487c-8db4-7a1d065f52b7',
       env: request_headers
@@ -54,7 +49,7 @@ RSpec.describe Idempotency::Rails do
   let(:request_headers) { { 'HTTP_IDEMPOTENCY_KEY' => idempotency_key } }
   let(:idempotency_key) { SecureRandom.uuid }
 
-  let(:response) { Response.new(response_status, response_body, response_headers) }
+  let(:response) { [response_status, response_headers, [response_body]] }
   let(:response_status) { 200 }
   let(:response_body) { { result: 'some_result' }.to_json }
   let(:response_headers) { {} }
@@ -68,7 +63,7 @@ RSpec.describe Idempotency::Rails do
     Base64.strict_encode64(d.digest)
   end
   let(:cache_key) { "idempotency:cached_response:#{fingerprint}" }
-  let(:cache) { Idempotency::Cache.new(config: Idempotency.config) }
+  let(:cache) { Idempotency::Cache.new }
 
   before do
     expect(Idempotency::Cache).to receive(:new).and_return(cache)
@@ -90,28 +85,35 @@ RSpec.describe Idempotency::Rails do
   end
 
   context 'when request is cached' do
-    let(:response) { Response.new(nil, nil, {}) }
     let(:cached_headers) { { 'key' => 'value' } }
     let(:cached_status) { 201 }
     let(:cached_body) { { offer_id: SecureRandom.uuid }.to_json }
 
     before do
       expect(mock_controller_action).not_to receive(:call)
-      cache.set(fingerprint, *Response.new(cached_status, cached_body, cached_headers).to_a)
+      cache.set(fingerprint, cached_status, cached_headers, cached_body)
     end
 
     it 'returns cached request' do
       subject
 
-      expect(response.headers).to eq(cached_headers.merge('Idempotency-Key' => idempotency_key))
-      expect(response.status).to eq(cached_status)
-      expect(response.body).to eq(cached_body)
+      expect(controller.headers).to eq(cached_headers.merge('Idempotency-Key' => idempotency_key))
+      expect(controller.status).to eq(cached_status)
+      expect(controller.body).to eq(cached_body)
     end
   end
 
   context 'when request is not cached' do
-    let(:mock_controller_action) { double('Controller', call: 1) }
-    let(:response) { Response.new(response_status, response_body, response_headers) }
+    let(:mock_controller_action) do
+      double(
+        'Controller',
+        call: 1.tap do
+          controller.status = response_status
+          controller.headers = response_headers
+          controller.body = response_body
+        end
+      )
+    end
 
     before do
       expect(cache)
@@ -124,16 +126,24 @@ RSpec.describe Idempotency::Rails do
 
       cached_status, cached_headers, cached_body = cache.get(fingerprint)
       expect(cached_status).to eq(response_status)
-      expect(cached_body).to eq(response_body)
+      expect(cached_body).to eq([response_body])
       expect(cached_headers).to eq({})
 
-      expect(response.headers).to include({ 'Idempotency-Key' => be_a(String) })
+      expect(controller.headers).to include({ 'Idempotency-Key' => be_a(String) })
     end
   end
 
   context 'when response is 5xx' do
-    let(:mock_controller_action) { double('Controller', call: 1) }
-    let(:response) { Response.new(response_status, response_body, response_headers) }
+    let(:mock_controller_action) do
+      double(
+        'Controller',
+        call: 1.tap do
+          controller.status = response_status
+          controller.headers = response_headers
+          controller.body = response_body
+        end
+      )
+    end
     let(:response_status) { 500 }
 
     before do
@@ -146,15 +156,15 @@ RSpec.describe Idempotency::Rails do
   end
 
   context 'when there is concurrent request' do
-    let(:response) { Response.new(nil, nil, nil) }
+    let(:response) { nil }
     let(:mock_controller_action) { double('Controller', call: 1) }
 
     it 'returns 409 error and does not cache request' do
       subject
 
       expect(cache.get(fingerprint)).to be_nil
-      expect(response.status).to eq(409)
-      expect(response.body).to eq(Idempotency.config.response_body.concurrent_error)
+      expect(controller.status).to eq(409)
+      expect(controller.body).to eq(Idempotency.config.response_body.concurrent_error)
     end
   end
 end

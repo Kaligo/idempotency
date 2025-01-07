@@ -3,14 +3,14 @@
 require_relative '../idempotency'
 
 class Idempotency
-  module Rails
+  module Hanami
     def use_cache(request_identifiers = [], lock_duration: nil)
       response_status, response_headers, response_body = Idempotency.use_cache(
         request, request_identifiers, lock_duration:
       ) do
         yield
 
-        [response.status, response.headers, response.body]
+        response
       end
 
       set_response(response_status, response_headers, response_body)
@@ -19,11 +19,9 @@ class Idempotency
     private
 
     def set_response(status, headers, body)
-      response.status = status
-      response.body = body
-      headers.each do |key, value|
-        response.set_header(key, value)
-      end
+      self.status = status
+      self.body = body
+      self.headers.merge!(headers)
     end
   end
 end

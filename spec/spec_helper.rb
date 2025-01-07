@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'idempotency'
+require 'idempotency/hanami'
+require 'idempotency/rails'
 require 'pry-byebug'
 require 'mock_redis'
 require 'dry/configurable/test_interface'
@@ -10,7 +12,7 @@ Idempotency.configure do |config|
   config.logger = Logger.new(nil)
 end
 
-module Idempotency
+class Idempotency
   enable_test_interface
 
   def self.reset_config
