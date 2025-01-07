@@ -34,6 +34,7 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
   spec.metadata['rubygems_mfa_required'] = 'true'
 
+  spec.add_dependency 'base64'
   spec.add_dependency 'dry-configurable'
   spec.add_dependency 'msgpack'
   spec.add_dependency 'redis'
