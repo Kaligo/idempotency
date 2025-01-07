@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    idempotency (0.1.0)
+    idempotency (0.1.1)
       base64
       dry-configurable
       msgpack
