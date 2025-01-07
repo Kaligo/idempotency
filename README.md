@@ -10,12 +10,14 @@ gem 'idempotency'
 
 ## Configuration
 
-All the below configuration must be set:
-
 ```ruby
 Idempotency.configure do |config|
+  # required configurations
+
   config.redis_pool = ConnectionPool.new(size: 5) { Redis.new }
   config.logger = Logger.new # could be Rails.logger or Hanami.logger depending on the framework
+
+  # optional configurations
 
   # This configuration handles concurrent request locks.
   # When a request starts, a lock for the request will be created. If the request
@@ -30,6 +32,9 @@ Idempotency.configure do |config|
   config.response_body.concurrent_error = {
     errors: [{ message: 'Concurrent requests occurred' }]
   }
+
+  config.idempotent_methods = %[POST PUT PATCH]
+  config.idempotent_statuses = (200..299).to_a
 end
 ```
 

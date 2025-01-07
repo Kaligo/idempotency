@@ -13,6 +13,7 @@ class Idempotency
   setting :logger
   setting :default_lock_expiry, default: 300 # 5 minutes
   setting :idempotent_methods, default: %w[POST PUT PATCH DELETE]
+  setting :idempotent_statuses, default: (200..299).to_a + (400..499).to_a
 
   setting :response_body do
     setting :concurrent_error, default: {
@@ -77,11 +78,11 @@ class Idempotency
   end
 
   def cache_request?(request)
-    request.request_method == 'POST'
+    config.idempotent_methods.include?(request.request_method)
   end
 
   def cache_response?(response_status)
-    (200..299).include?(response_status) || (400..499).include?(response_status)
+    config.idempotent_statuses.include?(response_status)
   end
 
   def unquote(str)
