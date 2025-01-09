@@ -14,6 +14,14 @@ RSpec.describe Idempotency::Rails do
       response.status = status
     end
 
+    def controller_name
+      'orders'
+    end
+
+    def action_name
+      'create'
+    end
+
     private
 
     attr_reader :request, :response

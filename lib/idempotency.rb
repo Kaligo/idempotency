@@ -5,12 +5,25 @@ require 'json'
 require 'base64'
 require_relative 'idempotency/cache'
 require_relative 'idempotency/constants'
+require_relative 'idempotency/instrumentation/statsd_listener'
+require 'dry-monitor'
 
 class Idempotency
   extend Dry::Configurable
+  @monitor = Monitor.new
+
+  def self.notifier
+    @monitor.synchronize do
+      @notifier ||= Dry::Monitor::Notifications.new(:idempotency_gem).tap do |n|
+        Events::ALL_EVENTS.each { |event| n.register_event(event) }
+      end
+    end
+  end
 
   setting :redis_pool
   setting :logger
+  setting :instrumentation_listeners, default: []
+
   setting :default_lock_expiry, default: 300 # 5 minutes
   setting :idempotent_methods, default: %w[POST PUT PATCH DELETE]
   setting :idempotent_statuses, default: (200..299).to_a + (400..499).to_a
@@ -21,16 +34,24 @@ class Idempotency
     }.to_json
   end
 
+  def self.configure
+    super
+
+    config.instrumentation_listeners.each(&:setup_subscriptions)
+  end
+
   def initialize(config: Idempotency.config, cache: Cache.new(config:))
     @config = config
     @cache = cache
   end
 
-  def self.use_cache(request, request_identifiers, lock_duration: nil, &blk)
-    new.use_cache(request, request_identifiers, lock_duration:, &blk)
+  def self.use_cache(request, request_identifiers, lock_duration: nil, action: nil, &blk)
+    new.use_cache(request, request_identifiers, lock_duration:, action:, &blk)
   end
 
-  def use_cache(request, request_identifiers, lock_duration:) # rubocop:disable Metrics/AbcSize
+  def use_cache(request, request_identifiers, lock_duration: nil, action: nil) # rubocop:disable Metrics/AbcSize
+    duration_start = Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+
     return yield unless cache_request?(request)
 
     request_headers = request.env
@@ -42,6 +63,8 @@ class Idempotency
 
     if (cached_status, cached_headers, cached_body = cached_response)
       cached_headers.merge!(Constants::HEADER_KEY => idempotency_key)
+      instrument(Events::CACHE_HIT, request:, action:, duration: calculate_duration(duration_start))
+
       return [cached_status, cached_headers, cached_body]
     end
 
@@ -55,14 +78,24 @@ class Idempotency
       response_headers.merge!({ Constants::HEADER_KEY => idempotency_key })
     end
 
+    instrument(Events::CACHE_MISS, request:, action:, duration: calculate_duration(duration_start))
     [response_status, response_headers, response_body]
   rescue Idempotency::Cache::LockConflict
+    instrument(Events::LOCK_CONFLICT, request:, action:, duration: calculate_duration(duration_start))
     [409, {}, config.response_body.concurrent_error]
   end
 
   private
 
   attr_reader :config, :cache
+
+  def instrument(event_name, **metadata)
+    Idempotency.notifier.instrument(event_name, **metadata)
+  end
+
+  def calculate_duration(start_time)
+    Process.clock_gettime(::Process::CLOCK_MONOTONIC) - start_time
+  end
 
   def calculate_fingerprint(request, idempotency_key, request_identifiers)
     d = Digest::SHA256.new

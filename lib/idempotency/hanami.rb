@@ -4,9 +4,9 @@ require_relative '../idempotency'
 
 class Idempotency
   module Hanami
-    def use_cache(request_identifiers = [], lock_duration: nil)
+    def use_cache(request_identifiers = [], lock_duration: nil, action: self.class.name)
       response_status, response_headers, response_body = Idempotency.use_cache(
-        request, request_identifiers, lock_duration:
+        request, request_identifiers, lock_duration:, action:
       ) do
         yield
 
