@@ -100,3 +100,31 @@ RSpec.configure do |config|
 end
 ```
 
+### Instrumentation
+
+The gem supports instrumentation through StatsD. It tracks the following metrics:
+
+- `idempotency_cache_hit_count` - Incremented when a cached response is found
+- `idempotency_cache_miss_count` - Incremented when no cached response exists
+- `idempotency_lock_conflict_count` - Incremented when concurrent requests conflict
+- `idempotency_cache_duration_seconds` - Histogram of operation duration
+
+Each metric includes tags:
+- `action` - Either the specified action name or `"{HTTP_METHOD}:{PATH}"`
+- `namespace` - Your configured namespace (if provided)
+- `metric` - The metric name (for duration histogram only)
+
+To enable above instrumentation, configure a StatsD listener:
+
+```ruby
+statsd_client = Datadog::Statsd.new
+statsd_listener = Idempotency::Instrumentation::StatsdListener.new(
+  statsd_client,
+  'my_service_name'
+)
+
+Idempotency.configure do |config|
+  config.instrumentation_listeners = [statsd_listener]
+end
+```
+
