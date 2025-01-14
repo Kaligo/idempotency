@@ -89,3 +89,14 @@ end
 
 # Render your response
 ```
+
+### Testing
+
+For those using `mock_redis` gem, some methods that `idempotency` gem uses are not implemented (e.g. eval, evalsha), and this could cause test cases to fail. To get around this, the gem has a monkeypatch over `mock_redis` gem to override the missing methods. To use it, simply add following lines to your `spec_helper.rb`:
+
+```ruby
+RSpec.configure do |config|
+  config.include Idempotency::Testing::Helpers
+end
+```
+
