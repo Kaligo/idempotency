@@ -23,6 +23,10 @@ class Idempotency
   setting :redis_pool
   setting :logger
   setting :instrumentation_listeners, default: []
+  setting :metrics do
+    setting :namespace
+    setting :statsd_client
+  end
 
   setting :default_lock_expiry, default: 300 # 5 minutes
   setting :idempotent_methods, default: %w[POST PUT PATCH DELETE]
@@ -36,6 +40,13 @@ class Idempotency
 
   def self.configure
     super
+
+    if config.metrics.statsd_client
+      config.instrumentation_listeners << Idempotency::Instrumentation::StatsdListener.new(
+        config.metrics.statsd_client,
+        config.metrics.namespace
+      )
+    end
 
     config.instrumentation_listeners.each(&:setup_subscriptions)
   end

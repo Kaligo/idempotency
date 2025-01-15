@@ -2,7 +2,6 @@
 
 ## [0.1.4] - 2025-01-14
 
-- Support instrumentation via event hook approach
 - Support metrics logging via StatsdListener
 
 ## [0.1.3] - 2025-01-14

@@ -156,4 +156,42 @@ RSpec.describe Idempotency do
     expect(config.default_lock_expiry).to eq(60)
     expect(config.response_body.concurrent_error).to eq({ errors: [{ code: 'GH0004', message: 'Some message' }] })
   end
+
+  describe '#configure' do
+    let(:statsd_client) { double('statsd_client') }
+    let(:custom_listener) { double('custom_listener', setup_subscriptions: true) }
+
+    before do
+      described_class.config.metrics.statsd_client = nil
+      described_class.config.instrumentation_listeners = []
+    end
+
+    it 'sets up StatsdListener when statsd_client is configured' do
+      expect(Idempotency::Instrumentation::StatsdListener).to receive(:new)
+        .with(statsd_client, 'test_namespace')
+        .and_return(custom_listener)
+
+      described_class.configure do |config|
+        config.metrics.statsd_client = statsd_client
+        config.metrics.namespace = 'test_namespace'
+      end
+
+      expect(described_class.config.instrumentation_listeners).to include(custom_listener)
+    end
+
+    it 'calls setup_subscriptions on all listeners' do
+      described_class.config.instrumentation_listeners = [custom_listener]
+      expect(custom_listener).to receive(:setup_subscriptions)
+
+      described_class.configure
+    end
+
+    it 'does not add StatsdListener when statsd_client is not configured' do
+      described_class.configure do |config|
+        config.metrics.namespace = 'test_namespace'
+      end
+
+      expect(described_class.config.instrumentation_listeners).to be_empty
+    end
+  end
 end
