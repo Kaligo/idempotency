@@ -6,17 +6,24 @@ RSpec.describe Idempotency do
   it 'has a version number' do
     expect(Idempotency::VERSION).not_to be nil
   end
+  let(:notifier) { double(Dry::Monitor::Notifications) }
+
+  before do
+    allow(Idempotency).to receive(:notifier).and_return(notifier)
+  end
 
   after { Idempotency.reset_config }
 
   describe '#use_cache' do
-    subject { described_class.new(cache:).use_cache(request, request_ids, lock_duration:, &controller_action) }
+    subject { described_class.new(cache:).use_cache(request, request_ids, lock_duration:, action:, &controller_action) }
 
+    let(:statsd_client) { double('statsd_client') }
     let(:controller_action) do
       lambda do
         response
       end
     end
+    let(:action) { 'POST:/int/orders/order_id' }
     let(:request_ids) { ['tenant_id'] }
     let(:request) do
       double(
@@ -59,7 +66,16 @@ RSpec.describe Idempotency do
         cache.set(fingerprint, cached_status, cached_headers, cached_body)
       end
 
-      it { is_expected.to eq(expected_response) }
+      it 'returns cached response and logs cache hit event' do
+        expect(notifier).to receive(:instrument).with(
+          Idempotency::Events::CACHE_HIT,
+          request: request,
+          action: action,
+          duration: be_kind_of(Numeric)
+        )
+
+        is_expected.to eq(expected_response)
+      end
     end
 
     context 'when request is not cached' do
@@ -73,6 +89,13 @@ RSpec.describe Idempotency do
         end
 
         it 'return response and does not cache response' do
+          expect(notifier).to receive(:instrument).with(
+            Idempotency::Events::CACHE_MISS,
+            request: request,
+            action: action,
+            duration: be_kind_of(Numeric)
+          )
+
           expect { is_expected.to eq(response) }.not_to(change { cache.get(fingerprint) })
         end
       end
@@ -86,7 +109,14 @@ RSpec.describe Idempotency do
             .with(fingerprint, be_a(String))
         end
 
-        it 'return response and caches response' do
+        it 'returns response, caches it, and logs cache miss metric' do
+          expect(notifier).to receive(:instrument).with(
+            Idempotency::Events::CACHE_MISS,
+            request: request,
+            action: action,
+            duration: be_kind_of(Numeric)
+          )
+
           expect { is_expected.to eq(response) }
             .to change { cache.get(fingerprint) }
             .from(nil).to([400, {}, { error: 'some_error' }.to_json])
@@ -98,6 +128,13 @@ RSpec.describe Idempotency do
         let(:expected_response) { [409, {}, Idempotency.config.response_body.concurrent_error] }
 
         it 'returns 409 error and does not cache request' do
+          expect(notifier).to receive(:instrument).with(
+            Idempotency::Events::LOCK_CONFLICT,
+            request: request,
+            action: action,
+            duration: be_kind_of(Numeric)
+          )
+
           expect { is_expected.to eq(expected_response) }.not_to(change { cache.get(fingerprint) })
         end
       end
@@ -118,5 +155,43 @@ RSpec.describe Idempotency do
     expect(config.redis_pool).to eq(redis_pool)
     expect(config.default_lock_expiry).to eq(60)
     expect(config.response_body.concurrent_error).to eq({ errors: [{ code: 'GH0004', message: 'Some message' }] })
+  end
+
+  describe '#configure' do
+    let(:statsd_client) { double('statsd_client') }
+    let(:custom_listener) { double('custom_listener', setup_subscriptions: true) }
+
+    before do
+      described_class.config.metrics.statsd_client = nil
+      described_class.config.instrumentation_listeners = []
+    end
+
+    it 'sets up StatsdListener when statsd_client is configured' do
+      expect(Idempotency::Instrumentation::StatsdListener).to receive(:new)
+        .with(statsd_client, 'test_namespace')
+        .and_return(custom_listener)
+
+      described_class.configure do |config|
+        config.metrics.statsd_client = statsd_client
+        config.metrics.namespace = 'test_namespace'
+      end
+
+      expect(described_class.config.instrumentation_listeners).to include(custom_listener)
+    end
+
+    it 'calls setup_subscriptions on all listeners' do
+      described_class.config.instrumentation_listeners = [custom_listener]
+      expect(custom_listener).to receive(:setup_subscriptions)
+
+      described_class.configure
+    end
+
+    it 'does not add StatsdListener when statsd_client is not configured' do
+      described_class.configure do |config|
+        config.metrics.namespace = 'test_namespace'
+      end
+
+      expect(described_class.config.instrumentation_listeners).to be_empty
+    end
   end
 end

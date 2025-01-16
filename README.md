@@ -28,7 +28,14 @@ Idempotency.configure do |config|
   }
 
   config.idempotent_methods = %w[POST PUT PATCH]
-  config.idempotent_statuses = (200..299).to_a
+  config.idempotent_statuses = (200..299).to_a + (400..499).to_a
+
+  # Metrics configuration
+  config.metrics.statsd_client = statsd_client # Your StatsD client instance
+  config.metrics.namespace = 'my_service_name' # Optional namespace for metrics
+
+  # Custom instrumentation listeners (optional)
+  config.instrumentation_listeners = [my_custom_listener] # Array of custom listeners
 end
 ```
 
@@ -100,3 +107,25 @@ RSpec.configure do |config|
 end
 ```
 
+### Instrumentation
+
+The gem supports instrumentation through StatsD out of the box. When you configure a StatsD client in the configuration, the StatsdListener will be automatically set up. It tracks the following metrics:
+
+- `idempotency_cache_hit_count` - Incremented when a cached response is found
+- `idempotency_cache_miss_count` - Incremented when no cached response exists
+- `idempotency_lock_conflict_count` - Incremented when concurrent requests conflict
+- `idempotency_cache_duration_seconds` - Histogram of operation duration
+
+Each metric includes tags:
+- `action` - Either the specified action name or `"{HTTP_METHOD}:{PATH}"`
+- `namespace` - Your configured namespace (if provided)
+- `metric` - The metric name (for duration histogram only)
+
+To enable StatsD instrumentation, simply configure the metrics settings:
+
+```ruby
+Idempotency.configure do |config|
+  config.metrics.statsd_client = Datadog::Statsd.new
+  config.metrics.namespace = 'my_service_name'
+end
+```
