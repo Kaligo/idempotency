@@ -43,7 +43,7 @@ class Idempotency
       key = response_cache_key(fingerprint)
 
       with_redis do |r|
-        r.set(key, serialize(response_status, response_headers, response_body))
+        r.set(key, serialize(response_status, response_headers, response_body), ex: DEFAULT_CACHE_EXPIRY)
       end
     end
 
