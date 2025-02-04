@@ -46,8 +46,9 @@ RSpec.describe Idempotency::Cache do
     let(:response_headers) { { 'header' => 'valuee' } }
 
     it 'sets data in cache correctly' do
-      is_expected.to eq('OK')
+      expect(subject).to eq('OK')
       expect(cache.get(fingerprint)).to eq([response_status, response_body, response_headers])
+      expect(mock_redis.ttl("idempotency:cached_response:#{fingerprint}")).to eq(86_400)
     end
   end
 

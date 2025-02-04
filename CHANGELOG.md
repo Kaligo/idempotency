@@ -1,5 +1,9 @@
 ## [Change Log]
 
+## [0.1.5] - 2025-02-04
+
+- Set correct expiration time for idempotency cache
+
 ## [0.1.4] - 2025-01-14
 
 - Support metrics logging via StatsdListener
@@ -19,4 +23,3 @@
 ## [0.1.0] - 2024-11-13
 
 - Initial release
-
