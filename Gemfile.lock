@@ -55,7 +55,7 @@ GEM
       byebug (~> 11.0)
       pry (>= 0.13, < 0.15)
     racc (1.8.1)
-    rack (2.2.10)
+    rack (2.2.14)
     rainbow (3.1.1)
     redis (5.3.0)
       redis-client (>= 0.22.0)
