@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
 require 'hanami-controller'
-require_relative '../../../lib/hanami/action/callbacks'
-require_relative '../../../lib/hanami/utils/callbacks'
+require_relative '../../../lib/idempotency/hanami_extend'
 
 RSpec.describe Hanami::Action::Callbacks do
   describe 'callbacks' do
