@@ -72,6 +72,7 @@ Add this to your controller:
 
 ```ruby
 require 'idempotency/hanami'
+require 'idempotency/hanami_extend' # use this if around callback is necessary
 
 class Api::Controllers::Users::Create
   include Hanami::Action

@@ -1,5 +1,9 @@
 ## [Change Log]
 
+## [0.2.0] - 2025-07-28
+
+- Enforce explicit monkey-patch requirement
+
 ## [0.1.5] - 2025-02-04
 
 - Set correct expiration time for idempotency cache
