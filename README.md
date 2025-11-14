@@ -34,6 +34,11 @@ Idempotency.configure do |config|
   config.metrics.statsd_client = statsd_client # Your StatsD client instance
   config.metrics.namespace = 'my_service_name' # Optional namespace for metrics
 
+  # APM/Observability configuration (optional) - adds method to trace stacks
+  # You can enable one or both observability tools simultaneously
+  config.observability.appsignal_enabled = true  # Enable AppSignal transaction tracking
+  config.observability.sentry_enabled = true     # Enable Sentry transaction tracking
+
   # Custom instrumentation listeners (optional)
   config.instrumentation_listeners = [my_custom_listener] # Array of custom listeners
 end
@@ -110,7 +115,11 @@ end
 
 ### Instrumentation
 
-The gem supports instrumentation through StatsD out of the box. When you configure a StatsD client in the configuration, the StatsdListener will be automatically set up. It tracks the following metrics:
+The gem supports instrumentation through multiple observability platforms:
+
+#### StatsD
+
+When you configure a StatsD client in the configuration, the StatsdListener will be automatically set up. It tracks the following metrics:
 
 - `idempotency_cache_hit_count` - Incremented when a cached response is found
 - `idempotency_cache_miss_count` - Incremented when no cached response exists
@@ -122,7 +131,7 @@ Each metric includes tags:
 - `namespace` - Your configured namespace (if provided)
 - `metric` - The metric name (for duration histogram only)
 
-To enable StatsD instrumentation, simply configure the metrics settings:
+To enable StatsD instrumentation:
 
 ```ruby
 Idempotency.configure do |config|
@@ -130,3 +139,44 @@ Idempotency.configure do |config|
   config.metrics.namespace = 'my_service_name'
 end
 ```
+
+#### AppSignal
+
+The gem can add the `use_cache` method to AppSignal transaction traces when enabled. This allows you to see the idempotency check as part of your request traces and helps identify performance bottlenecks.
+
+To enable AppSignal transaction tracking:
+
+```ruby
+Idempotency.configure do |config|
+  config.observability.appsignal_enabled = true
+end
+```
+
+Note: The AppSignal gem must be installed and configured in your application.
+
+#### Sentry
+
+The gem can add the `use_cache` method to Sentry performance traces when enabled. This allows you to see the idempotency check as part of your request traces and automatically captures any errors that occur.
+
+To enable Sentry transaction tracking:
+
+```ruby
+Idempotency.configure do |config|
+  config.observability.sentry_enabled = true
+end
+```
+
+Note: The Sentry gem must be installed and configured in your application.
+
+#### Using Both AppSignal and Sentry
+
+You can enable both observability tools simultaneously. When both are enabled, the `use_cache` method will be instrumented in both APM systems with nested transactions:
+
+```ruby
+Idempotency.configure do |config|
+  config.observability.appsignal_enabled = true
+  config.observability.sentry_enabled = true
+end
+```
+
+This allows you to see the idempotency check in both your AppSignal and Sentry dashboards, providing comprehensive observability across your monitoring stack.

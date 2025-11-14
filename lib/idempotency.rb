@@ -8,6 +8,7 @@ require_relative 'idempotency/constants'
 require_relative 'idempotency/instrumentation/statsd_listener'
 require 'dry-monitor'
 
+# rubocop:disable Metrics/ClassLength
 class Idempotency
   extend Dry::Configurable
   @monitor = Monitor.new
@@ -26,6 +27,11 @@ class Idempotency
   setting :metrics do
     setting :namespace
     setting :statsd_client
+  end
+
+  setting :observability do
+    setting :appsignal_enabled, default: false
+    setting :sentry_enabled, default: false
   end
 
   setting :default_lock_expiry, default: 300 # 5 minutes
@@ -60,41 +66,46 @@ class Idempotency
     new.use_cache(request, request_identifiers, lock_duration:, action:, &blk)
   end
 
-  def use_cache(request, request_identifiers, lock_duration: nil, action: nil) # rubocop:disable Metrics/AbcSize
+  # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity
+  def use_cache(request, request_identifiers, lock_duration: nil, action: nil)
     duration_start = Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+    action_name = action || "#{request.request_method}:#{request.path}"
 
-    return yield unless cache_request?(request)
+    with_apm_instrumentation('idempotency.use_cache', action: action_name) do
+      return yield unless cache_request?(request)
 
-    request_headers = request.env
-    idempotency_key = unquote(request_headers[Constants::RACK_HEADER_KEY] || SecureRandom.hex)
+      request_headers = request.env
+      idempotency_key = unquote(request_headers[Constants::RACK_HEADER_KEY] || SecureRandom.hex)
 
-    fingerprint = calculate_fingerprint(request, idempotency_key, request_identifiers)
+      fingerprint = calculate_fingerprint(request, idempotency_key, request_identifiers)
 
-    cached_response = cache.get(fingerprint)
+      cached_response = cache.get(fingerprint)
 
-    if (cached_status, cached_headers, cached_body = cached_response)
-      cached_headers.merge!(Constants::HEADER_KEY => idempotency_key)
-      instrument(Events::CACHE_HIT, request:, action:, duration: calculate_duration(duration_start))
+      if (cached_status, cached_headers, cached_body = cached_response)
+        cached_headers.merge!(Constants::HEADER_KEY => idempotency_key)
+        instrument(Events::CACHE_HIT, request:, action:, duration: calculate_duration(duration_start))
 
-      return [cached_status, cached_headers, cached_body]
+        return [cached_status, cached_headers, cached_body]
+      end
+
+      lock_duration ||= config.default_lock_expiry
+      response_status, response_headers, response_body = cache.with_lock(fingerprint, lock_duration) do
+        yield
+      end
+
+      if cache_response?(response_status)
+        cache.set(fingerprint, response_status, response_headers, response_body)
+        response_headers.merge!({ Constants::HEADER_KEY => idempotency_key })
+      end
+
+      instrument(Events::CACHE_MISS, request:, action:, duration: calculate_duration(duration_start))
+      [response_status, response_headers, response_body]
     end
-
-    lock_duration ||= config.default_lock_expiry
-    response_status, response_headers, response_body = cache.with_lock(fingerprint, lock_duration) do
-      yield
-    end
-
-    if cache_response?(response_status)
-      cache.set(fingerprint, response_status, response_headers, response_body)
-      response_headers.merge!({ Constants::HEADER_KEY => idempotency_key })
-    end
-
-    instrument(Events::CACHE_MISS, request:, action:, duration: calculate_duration(duration_start))
-    [response_status, response_headers, response_body]
   rescue Idempotency::Cache::LockConflict
     instrument(Events::LOCK_CONFLICT, request:, action:, duration: calculate_duration(duration_start))
     [409, {}, config.response_body.concurrent_error]
   end
+  # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity
 
   private
 
@@ -137,4 +148,42 @@ class Idempotency
       str
     end
   end
+
+  # rubocop:disable Metrics/AbcSize
+  def with_apm_instrumentation(name, tags = {}, &block)
+    # Build nested instrumentation layers from innermost to outermost
+    instrumented_block = block
+
+    # Wrap with Sentry if enabled
+    if config.observability.sentry_enabled && defined?(Sentry)
+      instrumented_block = lambda do
+        transaction = Sentry.start_transaction(name: name, op: 'idempotency', **tags)
+        Sentry.get_current_scope.set_span(transaction)
+
+        begin
+          block.call
+        rescue StandardError => e
+          Sentry.capture_exception(e)
+          raise
+        ensure
+          transaction.finish
+        end
+      end
+    end
+
+    # Wrap with AppSignal if enabled (outermost layer)
+    if config.observability.appsignal_enabled && defined?(Appsignal)
+      Appsignal.monitor_transaction(name, tags) do
+        instrumented_block.call
+      rescue StandardError => e
+        Appsignal.set_error(e)
+        raise
+      end
+    else
+      # Execute the (potentially Sentry-wrapped) block
+      instrumented_block.call
+    end
+  end
+  # rubocop:enable Metrics/AbcSize
 end
+# rubocop:enable Metrics/ClassLength

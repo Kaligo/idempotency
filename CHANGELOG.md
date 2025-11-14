@@ -1,5 +1,11 @@
 ## [Change Log]
 
+## [0.3.0] - 2025-11-14
+
+- Add AppSignal integration for transaction tracking in trace stacks
+- Add Sentry integration for transaction tracking in trace stacks
+- Add observability configuration options (appsignal_enabled, sentry_enabled)
+
 ## [0.2.0] - 2025-07-28
 
 - Enforce explicit monkey-patch requirement
