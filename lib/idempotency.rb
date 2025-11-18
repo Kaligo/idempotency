@@ -71,7 +71,7 @@ class Idempotency
     duration_start = Process.clock_gettime(::Process::CLOCK_MONOTONIC)
     action_name = action || "#{request.request_method}:#{request.path}"
 
-    with_apm_instrumentation('idempotency.use_cache', action: action_name) do
+    with_apm_instrumentation('idempotency.use_cache', action_name) do
       return yield unless cache_request?(request)
 
       request_headers = request.env
@@ -150,30 +150,25 @@ class Idempotency
   end
 
   # rubocop:disable Metrics/AbcSize
-  def with_apm_instrumentation(name, tags = {}, &block)
+  def with_apm_instrumentation(name, action, &block)
     # Build nested instrumentation layers from innermost to outermost
     instrumented_block = block
 
     # Wrap with Sentry if enabled
     if config.observability.sentry_enabled && defined?(Sentry)
       instrumented_block = lambda do
-        transaction = Sentry.start_transaction(name: name, op: 'idempotency', **tags)
-        Sentry.get_current_scope.set_span(transaction)
-
-        begin
+        Sentry.with_child_span(op: name, description: action) do |_span|
           block.call
-        rescue StandardError => e
-          Sentry.capture_exception(e)
-          raise
-        ensure
-          transaction.finish
         end
+      rescue StandardError => e
+        Sentry.capture_exception(e)
+        raise
       end
     end
 
     # Wrap with AppSignal if enabled (outermost layer)
     if config.observability.appsignal_enabled && defined?(Appsignal)
-      Appsignal.monitor_transaction(name, tags) do
+      Appsignal.instrument(name, action) do
         instrumented_block.call
       rescue StandardError => e
         Appsignal.set_error(e)
