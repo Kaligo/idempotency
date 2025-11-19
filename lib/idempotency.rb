@@ -148,12 +148,9 @@ class Idempotency # rubocop:disable Metrics/ClassLength
   end
 
   def with_apm_instrumentation(name, action, &)
-    if config.observability.appsignal_enabled && defined?(Appsignal)
+    if config.observability.appsignal_enabled
       Appsignal.instrument(name, action) do
         yield
-      rescue StandardError => e
-        Appsignal.set_error(e)
-        raise
       end
     else
       yield

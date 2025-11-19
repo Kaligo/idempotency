@@ -61,58 +61,6 @@ RSpec.describe 'Idempotency APM Instrumentation' do
 
         expect(result).to eq(block_result)
       end
-
-      it 'reports errors to AppSignal and re-raises' do
-        test_error = StandardError.new('test error')
-
-        expect(Appsignal).to receive(:instrument).with(
-          'test.operation', 'test'
-        ).and_yield
-
-        expect(Appsignal).to receive(:set_error).with(test_error)
-
-        expect do
-          idempotency.send(:with_apm_instrumentation, 'test.operation', 'test') do
-            raise test_error
-          end
-        end.to raise_error(StandardError, 'test error')
-      end
-
-      it 'handles exceptions during error reporting gracefully' do
-        test_error = StandardError.new('test error')
-
-        expect(Appsignal).to receive(:instrument).with(
-          'test.operation', 'test'
-        ).and_yield
-
-        expect(Appsignal).to receive(:set_error).with(test_error).and_raise('AppSignal error')
-
-        expect do
-          idempotency.send(:with_apm_instrumentation, 'test.operation', 'test') do
-            raise test_error
-          end
-        end.to raise_error('AppSignal error')
-      end
-    end
-
-    context 'when AppSignal is enabled but not defined' do
-      before do
-        hide_const('Appsignal')
-
-        Idempotency.configure do |config|
-          config.redis_pool = redis_pool
-          config.logger = Logger.new(nil)
-          config.observability.appsignal_enabled = true
-        end
-      end
-
-      it 'falls back to executing without instrumentation' do
-        result = idempotency.send(:with_apm_instrumentation, 'test.operation', 'test') do
-          test_block.call
-        end
-
-        expect(result).to eq(block_result)
-      end
     end
   end
 end

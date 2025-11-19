@@ -15,5 +15,4 @@ gem 'pry-byebug'
 gem 'rubocop', '~> 1.21'
 
 # Optional observability integrations for testing
-gem 'appsignal', '>= 2.0', '< 4.0'
-gem 'sentry-ruby', '>= 4.1.0'
+gem 'appsignal', '>= 1.3.0'
