@@ -8,8 +8,7 @@ require_relative 'idempotency/constants'
 require_relative 'idempotency/instrumentation/statsd_listener'
 require 'dry-monitor'
 
-# rubocop:disable Metrics/ClassLength
-class Idempotency
+class Idempotency # rubocop:disable Metrics/ClassLength
   extend Dry::Configurable
   @monitor = Monitor.new
 
@@ -31,7 +30,6 @@ class Idempotency
 
   setting :observability do
     setting :appsignal_enabled, default: false
-    setting :sentry_enabled, default: false
   end
 
   setting :default_lock_expiry, default: 300 # 5 minutes
@@ -71,7 +69,7 @@ class Idempotency
     duration_start = Process.clock_gettime(::Process::CLOCK_MONOTONIC)
     action_name = action || "#{request.request_method}:#{request.path}"
 
-    with_apm_instrumentation('idempotency.use_cache', action: action_name) do
+    with_apm_instrumentation('idempotency.use_cache', action_name) do
       return yield unless cache_request?(request)
 
       request_headers = request.env
@@ -149,41 +147,16 @@ class Idempotency
     end
   end
 
-  # rubocop:disable Metrics/AbcSize
-  def with_apm_instrumentation(name, tags = {}, &block)
-    # Build nested instrumentation layers from innermost to outermost
-    instrumented_block = block
-
-    # Wrap with Sentry if enabled
-    if config.observability.sentry_enabled && defined?(Sentry)
-      instrumented_block = lambda do
-        transaction = Sentry.start_transaction(name: name, op: 'idempotency', **tags)
-        Sentry.get_current_scope.set_span(transaction)
-
-        begin
-          block.call
-        rescue StandardError => e
-          Sentry.capture_exception(e)
-          raise
-        ensure
-          transaction.finish
-        end
-      end
-    end
-
-    # Wrap with AppSignal if enabled (outermost layer)
+  def with_apm_instrumentation(name, action, &)
     if config.observability.appsignal_enabled && defined?(Appsignal)
-      Appsignal.monitor_transaction(name, tags) do
-        instrumented_block.call
+      Appsignal.instrument(name, action) do
+        yield
       rescue StandardError => e
         Appsignal.set_error(e)
         raise
       end
     else
-      # Execute the (potentially Sentry-wrapped) block
-      instrumented_block.call
+      yield
     end
   end
-  # rubocop:enable Metrics/AbcSize
 end
-# rubocop:enable Metrics/ClassLength

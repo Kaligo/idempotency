@@ -39,4 +39,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'dry-monitor'
   spec.add_dependency 'msgpack'
   spec.add_dependency 'redis'
+
+  spec.add_dependency 'appsignal', '>= 1.3.0'
 end
