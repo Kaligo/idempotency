@@ -154,20 +154,6 @@ end
 
 Note: The AppSignal gem must be installed and configured in your application.
 
-#### Sentry
-
-The gem can add the `use_cache` method to Sentry performance traces when enabled. This allows you to see the idempotency check as part of your request traces and automatically captures any errors that occur.
-
-To enable Sentry transaction tracking:
-
-```ruby
-Idempotency.configure do |config|
-  config.observability.sentry_enabled = true
-end
-```
-
-Note: The Sentry gem must be installed and configured in your application.
-
 #### Using Both AppSignal and Sentry
 
 You can enable both observability tools simultaneously. When both are enabled, the `use_cache` method will be instrumented in both APM systems with nested transactions:
