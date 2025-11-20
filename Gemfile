@@ -13,3 +13,6 @@ gem 'dry-monitor'
 gem 'hanami-controller', '~> 1.3'
 gem 'pry-byebug'
 gem 'rubocop', '~> 1.21'
+
+# Optional observability integrations for testing
+gem 'appsignal', '>= 1.3.0'
