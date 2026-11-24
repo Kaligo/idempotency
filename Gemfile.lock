@@ -46,7 +46,7 @@ GEM
     logger (1.6.1)
     method_source (1.1.0)
     mock_redis (0.46.0)
-    msgpack (1.7.5)
+    msgpack (1.8.7)
     parallel (1.26.3)
     parser (3.3.6.0)
       ast (~> 2.4.1)
